@@ -1,5 +1,5 @@
 use std::time::{Duration, Instant};
-use rand::seq::IndexedRandom;
+use rand::{seq::IndexedRandom, RngExt};
 
 const GRID_WIDTH: u8 = 14;
 const GRID_HEIGHT: u8 = 8;
@@ -40,20 +40,27 @@ const HARD : DifficultyParameters = DifficultyParameters {
     skeleton_speed: 2.0,
 };
 
+#[derive(PartialEq)]
 enum TileType {
     Floor,
     Wall,
+    Obstacle,
 }
 
-fn generate_grid(difficulty: DifficultyParameters) -> Vec<Vec<TileType>> {
+fn generate_grid(difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> Vec<Vec<TileType>> {
     let mut grid = Vec::new();
+
     for y in 0..GRID_HEIGHT {
         let mut row = Vec::new();
         for x in 0..GRID_WIDTH {
             if x == 0 || x == GRID_WIDTH - 1 || y == 0 || y == GRID_HEIGHT - 1 {
                 row.push(TileType::Wall);
             } else {
-                row.push(TileType::Floor);
+                if rng.random_bool(0.25) { // 5% chance of obstacle
+                    row.push(TileType::Obstacle);
+                } else {
+                    row.push(TileType::Floor);
+                }
             }
         }
         grid.push(row);
@@ -61,34 +68,54 @@ fn generate_grid(difficulty: DifficultyParameters) -> Vec<Vec<TileType>> {
     grid
 }
 
-fn generate_skeletons(difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> Vec<(u8, u8)> {
+fn generate_skeletons(grid: &Vec<Vec<TileType>>, difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> Vec<(u8, u8)> {
     let mut floor_tiles = Vec::new();
     for y in 1..GRID_HEIGHT - 1 {
         for x in 1..GRID_WIDTH - 1 {
-            floor_tiles.push((x, y));
+            if grid[y as usize][x as usize] == TileType::Floor {
+                floor_tiles.push((x, y));
+            }
         }
     }
-    let skeletons: Vec<(u8, u8)> = floor_tiles.choose_multiple(rng, difficulty.skeleton_count as usize).cloned().collect();
+    let skeletons: Vec<(u8, u8)> = floor_tiles.sample(rng, difficulty.skeleton_count as usize).cloned().collect();
     skeletons
     
 }
 
+fn generate_coins(grid: &Vec<Vec<TileType>>, skeletons: &Vec<(u8, u8)>, rng: &mut impl rand::Rng) -> Vec<(u8, u8)> {
+    let mut floor_tiles = Vec::new();
+    for y in 1..GRID_HEIGHT - 1 {
+        for x in 1..GRID_WIDTH - 1 {
+            if matches!(grid[y as usize][x as usize], TileType::Floor) && !skeletons.contains(&(x, y)) {
+                floor_tiles.push((x, y));
+            }
+        }
+    }
+    let coins: Vec<(u8, u8)> = floor_tiles.sample(rng, 10).cloned().collect(); // Place 10 coins
+    coins
+}
+
 fn test() {
-    let grid = generate_grid(EASY);
-    // print grid — W = wall, . = floor
-    for row in &grid {
-        let line: String = row.iter().map(|t| match t {
-            TileType::Wall => 'W',
-            TileType::Floor => '.',
+    let mut rng = rand::rng();
+    let grid = generate_grid(EASY, &mut rng);
+    let skeletons = generate_skeletons(&grid, MEDIUM, &mut rng);
+
+    for (y, row) in grid.iter().enumerate() {
+        let line: String = row.iter().enumerate().map(|(x, t)| {
+            if skeletons.contains(&(x as u8, y as u8)) {
+                'S'
+            } else {
+                match t {
+                    TileType::Wall => 'W',
+                    TileType::Floor => '.',
+                    TileType::Obstacle => 'O',
+                }
+            }
         }).collect();
         println!("{}", line);
     }
 
-    let mut rng = rand::rng();
-    let skeletons = generate_skeletons(MEDIUM, &mut rng);
     println!("Skeletons: {:?}", skeletons);
-
-    // verify no duplicates
     let unique: std::collections::HashSet<_> = skeletons.iter().collect();
     assert_eq!(unique.len(), skeletons.len(), "duplicate skeleton positions!");
     println!("No duplicates. Done.");
