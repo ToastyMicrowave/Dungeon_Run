@@ -15,9 +15,11 @@ struct Game {
     difficulty: DifficultyParameters,
     player_position: (u8, u8),
     skeleton_positions: Vec<(u8, u8)>,
+    coin_positions: Vec<(u8, u8)>,
     lives_left: u8,
     time_left: Duration,
-    grid: Vec<Vec<u8>>,
+    grid: Vec<Vec<TileType>>,
+    score: u16,
 }
 
 const EASY: DifficultyParameters = DifficultyParameters {
@@ -48,7 +50,14 @@ enum TileType {
     Obstacle,
 }
 
-
+#[derive(PartialEq)]
+enum Input {
+    Up,
+    Down,
+    Left,
+    Right,
+    None,
+}
 
 fn generate_grid(difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> Vec<Vec<TileType>> {
     let mut grid = Vec::new();
@@ -107,6 +116,32 @@ fn spawn_player(grid: &Vec<Vec<TileType>>, skeletons: &Vec<(u8, u8)>, coins: &Ve
     floor_tiles.choose(rng).cloned().unwrap_or_else(|| {
         get_floor_tiles(grid, &exclude).into_iter().next().expect("No valid player spawn points available")
     })
+}
+
+fn tick(mut state: Game, input: Input, rng: &mut impl rand::Rng) -> Option<Game> {
+    let mut player_pos = state.player_position;
+    match input {
+        Input::Up => player_pos.1 = player_pos.1.saturating_sub(1),
+        Input::Down => player_pos.1 = player_pos.1.saturating_add(1),
+        Input::Left => player_pos.0 = player_pos.0.saturating_sub(1),
+        Input::Right => player_pos.0 = player_pos.0.saturating_add(1),
+        Input::None => (),
+    }
+    if !matches!(state.grid[player_pos.1 as usize][player_pos.0 as usize], TileType::Wall | TileType::Obstacle) {
+        state.player_position = player_pos; // only update pos if not wall or obstacle
+    }  
+    if state.skeleton_positions.contains(&state.player_position) {
+        state.lives_left = state.lives_left.saturating_sub(1);
+        if state.lives_left == 0 {
+            return None; // Game over
+        }
+        state.player_position = spawn_player(&state.grid, &state.skeleton_positions, &state.coin_positions, rng);
+    }
+    if state.coin_positions.contains(&state.player_position) {
+        state.score += 10;
+        state.coin_positions.retain(|&pos| pos != state.player_position);
+    }
+    Some(state)
 }
 
 fn test() {
