@@ -1,3 +1,4 @@
+mod dungeon_core;
 fn main() {
-    println!("Hello, world!");
+    dungeon_core::main();
 }
