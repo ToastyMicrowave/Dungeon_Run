@@ -4,6 +4,7 @@ use rand::{seq::IndexedRandom, RngExt};
 const GRID_WIDTH: u8 = 14;
 const GRID_HEIGHT: u8 = 8;
 const MIN_DISTANCE: u8 = 3; // Minimum distance between player and skeletons
+const VISION: u8 = 3; // How far the skeletons chase player from
 struct DifficultyParameters {
     lives: u8,
     timer: u8,
@@ -50,7 +51,7 @@ enum TileType {
     Obstacle,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 enum Input {
     Up,
     Down,
@@ -118,8 +119,40 @@ fn spawn_player(grid: &Vec<Vec<TileType>>, skeletons: &Vec<(u8, u8)>, coins: &Ve
     })
 }
 
+fn move_skeletons(state: &mut Game, player_pos: (u8, u8), rng: &mut impl rand::Rng) {
+    for mut skelly in &mut state.skeleton_positions {
+        let distance = skelly.0.abs_diff(player_pos.0) + skelly.1.abs_diff(player_pos.1);
+        if distance <= VISION {
+            let dx = player_pos.0 as i8 - skelly.0 as i8;
+            let dy = player_pos.1 as i8 - skelly.1 as i8;
+            if dx.abs() >= dy.abs() {
+                let new_x = if dx > 0 { skelly.0 + 1 } else if dx < 0 { skelly.0 - 1 } else { skelly.0 };
+                if matches!(state.grid[skelly.1 as usize][new_x as usize], TileType::Floor) {
+                    skelly.0 = new_x;
+                }
+            } else {
+                let new_y = if dy > 0 { skelly.1 + 1 } else if dy < 0 { skelly.1 - 1 } else { skelly.1 };
+                if matches!(state.grid[new_y as usize][skelly.0 as usize], TileType::Floor) {
+                    skelly.1 = new_y;
+                }
+            }
+        }
+        else {
+            let dirs: [(i8, i8); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+            let dir = dirs.choose(rng).unwrap();
+            let new_x = (skelly.0 as i16 + dir.0 as i16) as u8;
+            let new_y = (skelly.1 as i16 + dir.1 as i16) as u8;
+            if matches!(state.grid[new_y as usize][new_x as usize], TileType::Floor) {
+                skelly.0 = new_x;
+                skelly.1 = new_y;
+            }
+        }
+    }
+}
+
 fn tick(mut state: Game, input: Input, rng: &mut impl rand::Rng) -> Option<Game> {
     let mut player_pos = state.player_position;
+    move_skeletons(&mut state, player_pos, rng);
     match input {
         Input::Up => player_pos.1 = player_pos.1.saturating_sub(1),
         Input::Down => player_pos.1 = player_pos.1.saturating_add(1),
