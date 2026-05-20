@@ -3,6 +3,7 @@ use rand::{seq::IndexedRandom, RngExt};
 
 const GRID_WIDTH: u8 = 14;
 const GRID_HEIGHT: u8 = 8;
+const MIN_DISTANCE: u8 = 3; // Minimum distance between player and skeletons
 struct DifficultyParameters {
     lives: u8,
     timer: u8,
@@ -47,6 +48,8 @@ enum TileType {
     Obstacle,
 }
 
+
+
 fn generate_grid(difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> Vec<Vec<TileType>> {
     let mut grid = Vec::new();
 
@@ -68,42 +71,60 @@ fn generate_grid(difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> 
     grid
 }
 
-fn generate_skeletons(grid: &Vec<Vec<TileType>>, difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> Vec<(u8, u8)> {
-    let mut floor_tiles = Vec::new();
+fn get_floor_tiles(grid: &Vec<Vec<TileType>>, exclude: &[(u8, u8)]) -> Vec<(u8, u8)> {
+    let mut tiles = Vec::new();
     for y in 1..GRID_HEIGHT - 1 {
         for x in 1..GRID_WIDTH - 1 {
-            if grid[y as usize][x as usize] == TileType::Floor {
-                floor_tiles.push((x, y));
+            if matches!(grid[y as usize][x as usize], TileType::Floor) 
+                && !exclude.contains(&(x, y)) {
+                tiles.push((x, y));
             }
         }
     }
+    tiles
+}
+
+fn generate_skeletons(grid: &Vec<Vec<TileType>>, difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> Vec<(u8, u8)> {
+    let floor_tiles = get_floor_tiles(grid, &[]);
     let skeletons: Vec<(u8, u8)> = floor_tiles.sample(rng, difficulty.skeleton_count as usize).cloned().collect();
     skeletons
     
 }
 
 fn generate_coins(grid: &Vec<Vec<TileType>>, skeletons: &Vec<(u8, u8)>, rng: &mut impl rand::Rng) -> Vec<(u8, u8)> {
-    let mut floor_tiles = Vec::new();
-    for y in 1..GRID_HEIGHT - 1 {
-        for x in 1..GRID_WIDTH - 1 {
-            if matches!(grid[y as usize][x as usize], TileType::Floor) && !skeletons.contains(&(x, y)) {
-                floor_tiles.push((x, y));
-            }
-        }
-    }
+    let floor_tiles = get_floor_tiles(grid, skeletons);
     let coins: Vec<(u8, u8)> = floor_tiles.sample(rng, 10).cloned().collect(); // Place 10 coins
     coins
+}
+
+fn spawn_player(grid: &Vec<Vec<TileType>>, skeletons: &Vec<(u8, u8)>, coins: &Vec<(u8, u8)>,rng: &mut impl rand::Rng) -> (u8, u8) {
+    let exclude = [skeletons.as_slice(), coins.as_slice()].concat();
+    let floor_tiles: Vec<(u8, u8)> = get_floor_tiles(grid, &exclude)
+                    .into_iter()
+                    .filter(|&(x, y)| skeletons.iter()
+                    .all(|&(sx, sy)| sx.abs_diff(x) + sy.abs_diff(y) >= MIN_DISTANCE))
+                    .collect();
+    floor_tiles.choose(rng).cloned().unwrap_or_else(|| {
+        get_floor_tiles(grid, &exclude).into_iter().next().expect("No valid player spawn points available")
+    })
 }
 
 fn test() {
     let mut rng = rand::rng();
     let grid = generate_grid(EASY, &mut rng);
     let skeletons = generate_skeletons(&grid, MEDIUM, &mut rng);
+    let coins = generate_coins(&grid, &skeletons, &mut rng);
+    let player = spawn_player(&grid, &skeletons, &coins, &mut rng);
 
     for (y, row) in grid.iter().enumerate() {
         let line: String = row.iter().enumerate().map(|(x, t)| {
-            if skeletons.contains(&(x as u8, y as u8)) {
+            let pos = (x as u8, y as u8);
+            if pos == player {
+                'P'
+            } else if skeletons.contains(&pos) {
                 'S'
+            } else if coins.contains(&pos) {
+                'C'
             } else {
                 match t {
                     TileType::Wall => 'W',
@@ -115,10 +136,9 @@ fn test() {
         println!("{}", line);
     }
 
+    println!("Player: {:?}", player);
     println!("Skeletons: {:?}", skeletons);
-    let unique: std::collections::HashSet<_> = skeletons.iter().collect();
-    assert_eq!(unique.len(), skeletons.len(), "duplicate skeleton positions!");
-    println!("No duplicates. Done.");
+    println!("Coins: {:?}", coins);
 }
 pub fn main() {
     // const TICKS_PER_SECOND: u64 = 64
