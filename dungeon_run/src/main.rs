@@ -12,7 +12,8 @@ struct SpriteRect {
 }
 
 const SPRITE_FLOOR: SpriteRect = SpriteRect { x: 16.0 * 7.0, y: 0.0 };
-const SPRITE_WALL: SpriteRect = SpriteRect { x: 0.0, y: 0.0 };
+const SPRITE_WALL: SpriteRect = SpriteRect { x: 16.0 * 3.0 , y: 0.0 };
+const SPRITE_OBSTACLE: SpriteRect = SpriteRect { x: 16.0 * 9.0, y: 16.0 * 4.0 };
 const SPRITE_PLAYER: SpriteRect = SpriteRect { x: 16.0 * 4.0, y: 0.0 };
 const SPRITE_SKELETON: SpriteRect = SpriteRect { x: 16.0 * 6.0, y: 16.0 * 3.0};
 const SPRITE_COIN: SpriteRect = SpriteRect { x: 16.0 * 6.0, y: 16.0 * 8.0 };
@@ -67,11 +68,16 @@ async fn main() {
         for (y, row) in state.grid.iter().enumerate() {
             for (x, tile) in row.iter().enumerate() {
                 let pos = (x as f32 * TILE_SIZE, y as f32 * TILE_SIZE + HUD_HEIGHT);
-                match tile {
-                    TileType::Wall => draw_texture_ex(&tileset, pos.0, pos.1, PURPLE, sprite_params(SPRITE_WALL)),
-                    TileType::Floor => draw_texture_ex(&tileset, pos.0, pos.1, PURPLE, sprite_params(SPRITE_FLOOR)),
-                    TileType::Obstacle => draw_rectangle(pos.0, pos.1, TILE_SIZE, TILE_SIZE, BLACK),
+                let (sprite, color) = match tile {
+                    TileType::Wall => (SPRITE_WALL, PURPLE),
+                    TileType::Floor => (SPRITE_FLOOR, PURPLE),
+                    TileType::Obstacle => (SPRITE_OBSTACLE, PURPLE),
+                };
+                if matches!(tile, TileType::Obstacle) {
+                    draw_texture_ex(&tileset, pos.0, pos.1, color, sprite_params(SPRITE_FLOOR));
                 }
+                draw_texture_ex(&tileset, pos.0, pos.1, color, sprite_params(sprite));
+
                 if state.player_position == (x as u8, y as u8) {
                     draw_texture_ex(&charset, pos.0, pos.1, WHITE, sprite_params(SPRITE_PLAYER));
                 } else if state.skeleton_positions.contains(&(x as u8, y as u8)) {
