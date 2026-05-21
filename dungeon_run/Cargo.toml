@@ -1,0 +1,8 @@
+[package]
+name = "dungeon_run"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dungeon_core = { path = "../dungeon_core" }
+macroquad = "0.4"

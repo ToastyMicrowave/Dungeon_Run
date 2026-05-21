@@ -209,35 +209,6 @@ fn test() {
     println!("Coins: {:?}", coins);
 }
 pub fn main() {
-    // const TICKS_PER_SECOND: u64 = 64
-    // const MS_PER_TICK: u128 = 1000 / TICKS_PER_SECOND as u128;
-    // const SECONDS_PER_TICK: f64 = 1.0 / TICKS_PER_SECOND as f64;
-
-    // let mut previous_time = Instant::now();
-    // let mut lag = Duration::new(0, 0);
-    
-    // let mut game_state; // Placeholder for game state
-
-    // 'game_loop: loop {
-    //     let current_time = Instant::now();
-    //     let elapsed = current_time.duration_since(previous_time);
-    //     previous_time = current_time;
-    //     lag += elapsed;
-
-    //     // Handle input here 
-
-    //     // Update game logic at fixed intervals
-
-    //     while lag >= Duration::from_millis(MS_PER_TICK as u64) {
-    //         // Update game logic here
-    //         println!("Tick! Lag: {} ms", lag.as_millis());
-    //         lag -= Duration::from_millis(MS_PER_TICK as u64);
-    //     }
-
-    //     // Render the game here 
-
-    //     std::thread::sleep(Duration::from_millis(1)); // Sleep to prevent CPU hogging
-    // }
     test();
 }
 
