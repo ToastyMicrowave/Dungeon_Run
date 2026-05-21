@@ -208,7 +208,3 @@ fn test() {
     println!("Skeletons: {:?}", skeletons);
     println!("Coins: {:?}", coins);
 }
-pub fn main() {
-    test();
-}
-
