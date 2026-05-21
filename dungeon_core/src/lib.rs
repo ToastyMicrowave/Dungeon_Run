@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{os::macos::raw::stat, time::Duration};
 use rand::{seq::IndexedRandom, RngExt};
 
 pub const GRID_WIDTH: u8 = 14;
@@ -182,6 +182,10 @@ pub fn tick(mut state: Game, input: Input, delta: Duration, rng: &mut impl rand:
     if state.coin_positions.contains(&state.player_position) {
         state.score += 10;
         state.coin_positions.retain(|&pos| pos != state.player_position);
+    }
+    if state.coin_positions.is_empty() {
+        state.score += 50;
+        state.coin_positions = generate_coins(&state.grid, &state.skeleton_positions, rng);
     }
     Some(state)
 }
