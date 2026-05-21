@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 dungeon_core = { path = "../dungeon_core" }
 macroquad = "0.4"
+rand = "0.10.1"
