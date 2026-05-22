@@ -87,9 +87,9 @@ fn generate_menus(title: &str, buttons: &[&str], selected: usize, title_color: C
 }
 
 fn render_game(state: &Game, tileset: &Texture2D, charset: &Texture2D) {
-    draw_text(&format!("Score: {}", state.score), 10.0, 25.0, 30.0, WHITE);
-    draw_text(&format!("Lives: {}", state.lives_left), (GRID_WIDTH as f32 * TILE_SIZE) / 2.3, 25.0, 30.0, WHITE);
-    draw_text(&format!("Time: {}s", state.time_left.as_secs()), (GRID_WIDTH as f32 * TILE_SIZE) - 150.0, 25.0, 30.0, WHITE);
+    draw_text(format!("Score: {}", state.score), 10.0, 25.0, 30.0, WHITE);
+    draw_text(format!("Lives: {}", state.lives_left), (GRID_WIDTH as f32 * TILE_SIZE) / 2.3, 25.0, 30.0, WHITE);
+    draw_text(format!("Time: {}s", state.time_left.as_secs()), (GRID_WIDTH as f32 * TILE_SIZE) - 150.0, 25.0, 30.0, WHITE);
 
     for (y, row) in state.grid.iter().enumerate() {
         for (x, tile) in row.iter().enumerate() {
@@ -100,16 +100,16 @@ fn render_game(state: &Game, tileset: &Texture2D, charset: &Texture2D) {
                 TileType::Obstacle => (SPRITE_OBSTACLE, PURPLE),
             };
             if matches!(tile, TileType::Obstacle) {
-                draw_texture_ex(&tileset, pos.0, pos.1, color, sprite_params(SPRITE_FLOOR));
+                draw_texture_ex(tileset, pos.0, pos.1, color, sprite_params(SPRITE_FLOOR));
             }
-            draw_texture_ex(&tileset, pos.0, pos.1, color, sprite_params(sprite));
+            draw_texture_ex(tileset, pos.0, pos.1, color, sprite_params(sprite));
 
             if state.player_position == (x as u8, y as u8) {
-                draw_texture_ex(&charset, pos.0, pos.1, WHITE, sprite_params(SPRITE_PLAYER));
+                draw_texture_ex(charset, pos.0, pos.1, WHITE, sprite_params(SPRITE_PLAYER));
             } else if state.skeleton_positions.contains(&(x as u8, y as u8)) {
-                draw_texture_ex(&charset, pos.0, pos.1, WHITE, sprite_params(SPRITE_SKELETON));
+                draw_texture_ex(charset, pos.0, pos.1, WHITE, sprite_params(SPRITE_SKELETON));
             } else if state.coin_positions.contains(&(x as u8, y as u8)) {
-                draw_texture_ex(&tileset, pos.0, pos.1, WHITE, sprite_params(SPRITE_COIN));
+                draw_texture_ex(tileset, pos.0, pos.1, WHITE, sprite_params(SPRITE_COIN));
             }
         }
     }

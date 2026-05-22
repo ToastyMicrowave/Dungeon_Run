@@ -6,8 +6,10 @@ pub const GRID_HEIGHT: u8 = 8;
 pub const MIN_DISTANCE: u8 = 3;
 
 const MIN_REGION_SIZE: usize = 2;
-const OBSTACLE_CHANCE: f64 = 0.20;
-const VISION: u8 = 6;
+const OBSTACLE_CHANCE: f64 = 0.10;
+const VISION: u8 = 4;
+
+pub type PathMap = HashMap<(u8, u8), HashMap<(u8, u8), (u8, u8)>>;
 
 #[derive(Clone, Copy)]
 pub struct DifficultyParameters {
@@ -27,7 +29,7 @@ pub struct Game {
     pub time_left: Duration,
     pub grid: Vec<Vec<TileType>>,
     pub score: usize,
-    pub path_map: HashMap<(u8, u8), HashMap<(u8, u8), (u8, u8)>>,
+    pub path_map: PathMap,
 }
 
 pub const EASY: DifficultyParameters = DifficultyParameters {
@@ -41,14 +43,14 @@ pub const MEDIUM: DifficultyParameters = DifficultyParameters {
     lives: 3,
     timer: 60,
     skeleton_count: 4,
-    skeleton_speed: 1.5,
+    skeleton_speed: 1.25,
 };
 
 pub const HARD: DifficultyParameters = DifficultyParameters {
     lives: 2,
     timer: 45,
-    skeleton_count: 6,
-    skeleton_speed: 2.0,
+    skeleton_count: 5,
+    skeleton_speed: 1.5,
 };
 
 #[derive(PartialEq)]
@@ -85,7 +87,7 @@ pub fn generate_grid(rng: &mut impl rand::Rng) -> Vec<Vec<TileType>> {
     grid
 }
 
-pub fn get_floor_tiles(grid: &Vec<Vec<TileType>>, exclude: &[(u8, u8)]) -> Vec<(u8, u8)> {
+pub fn get_floor_tiles(grid: &[Vec<TileType>], exclude: &[(u8, u8)]) -> Vec<(u8, u8)> {
     let mut tiles = Vec::new();
     for y in 1..GRID_HEIGHT - 1 {
         for x in 1..GRID_WIDTH - 1 {
@@ -99,28 +101,28 @@ pub fn get_floor_tiles(grid: &Vec<Vec<TileType>>, exclude: &[(u8, u8)]) -> Vec<(
     tiles
 }
 
-pub fn generate_skeletons(grid: &Vec<Vec<TileType>>, difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> Vec<(u8, u8)> {
+pub fn generate_skeletons(grid: &[Vec<TileType>], difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> Vec<(u8, u8)> {
     let floor_tiles = get_floor_tiles(grid, &[]);
     floor_tiles.sample(rng, difficulty.skeleton_count as usize).cloned().collect()
 }
 
-pub fn generate_coins(grid: &Vec<Vec<TileType>>, skeletons: &Vec<(u8, u8)>, player_pos: &(u8, u8), rng: &mut impl rand::Rng, path_map: &HashMap<(u8, u8), HashMap<(u8, u8), (u8, u8)>>) -> Vec<(u8, u8)> {
-    let exclude = [skeletons.as_slice(), &[*player_pos].as_slice()].concat();
+pub fn generate_coins(grid: &[Vec<TileType>], skeletons: &[(u8, u8)], player_pos: &(u8, u8), rng: &mut impl rand::Rng, path_map: &PathMap) -> Vec<(u8, u8)> {
+    let exclude = [skeletons, [*player_pos].as_slice()].concat();
     let floor_tiles = get_floor_tiles(grid, &exclude).into_iter().filter(|tile| {path_map[player_pos].contains_key(tile) }).collect::<Vec<_>>();
     floor_tiles.sample(rng, 10.min(floor_tiles.len())).cloned().collect()
 }
 
-pub fn spawn_player(grid: &Vec<Vec<TileType>>, skeletons: &Vec<(u8, u8)>, rng: &mut impl rand::Rng) -> (u8, u8) {
-    let floor_tiles: Vec<(u8, u8)> = get_floor_tiles(grid, &skeletons)
+pub fn spawn_player(grid: &[Vec<TileType>], skeletons: &[(u8, u8)], rng: &mut impl rand::Rng) -> (u8, u8) {
+    let floor_tiles: Vec<(u8, u8)> = get_floor_tiles(grid, skeletons)
         .into_iter()
         .filter(|&(x, y)| skeletons.iter().all(|&(sx, sy)| sx.abs_diff(x) + sy.abs_diff(y) >= MIN_DISTANCE))
         .collect();
     floor_tiles.choose(rng).cloned().unwrap_or_else(|| {
-        get_floor_tiles(grid, &skeletons).into_iter().next().expect("No valid player spawn points")
+        get_floor_tiles(grid, skeletons).into_iter().next().expect("No valid player spawn points")
     })
 }
 
-fn bfs(grid: &Vec<Vec<TileType>>, source: (u8, u8)) -> HashMap<(u8, u8), (u8, u8)>  {
+fn bfs(grid: &[Vec<TileType>], source: (u8, u8)) -> HashMap<(u8, u8), (u8, u8)>  {
     let mut queue = VecDeque::new();
     let mut parents: HashMap<(u8, u8), (u8, u8)> = HashMap::new();
     parents.insert(source, source);
@@ -154,7 +156,7 @@ fn first_step_towards(parents: &HashMap<(u8, u8), (u8, u8)>, source: (u8, u8), t
     Some(current)
 }
 
-fn build_map(grid: &Vec<Vec<TileType>>) -> HashMap<(u8, u8), HashMap<(u8, u8), (u8, u8)>> {
+fn build_map(grid: &[Vec<TileType>]) -> PathMap {
     let mut path_map = HashMap::new();
     for y in 0..GRID_HEIGHT {
         for x in 0..GRID_WIDTH {
@@ -163,10 +165,8 @@ fn build_map(grid: &Vec<Vec<TileType>>) -> HashMap<(u8, u8), HashMap<(u8, u8), (
                 let parents = bfs(grid, source);
                 let mut target_map = HashMap::new();
                 for target in parents.keys() {
-                    if *target != source {
-                        if let Some(step) = first_step_towards(&parents, source, *target) {
-                            target_map.insert(*target, step);
-                        }
+                    if *target != source && let Some(step) = first_step_towards(&parents, source, *target) {
+                        target_map.insert(*target, step);
                     }
                 }
                 path_map.insert(source, target_map);
@@ -184,11 +184,9 @@ pub fn move_skeletons(state: &mut Game, player_pos: (u8, u8), rng: &mut impl ran
         let distance = skelly.0.abs_diff(player_pos.0) + skelly.1.abs_diff(player_pos.1);
         skeletons.retain(|&pos| pos != *skelly);
         if distance <= VISION {
-            if let Some(step) = state.path_map[skelly].get(&player_pos) {
-                if !skeletons.contains(&step) {
+            if let Some(step) = state.path_map[skelly].get(&player_pos) && !skeletons.contains(step) {
                     skelly.0 = step.0;
                     skelly.1 = step.1;
-                }
             }
         } else {
             let dirs: [(i8, i8); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
