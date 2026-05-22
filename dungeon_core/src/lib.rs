@@ -1,11 +1,13 @@
-use std::{os::macos::raw::stat, time::Duration};
+use std::{collections::{HashMap, VecDeque}, time::Duration};
 use rand::{seq::IndexedRandom, RngExt};
 
 pub const GRID_WIDTH: u8 = 14;
 pub const GRID_HEIGHT: u8 = 8;
 pub const MIN_DISTANCE: u8 = 3;
 
-const VISION: u8 = 1;
+const MIN_REGION_SIZE: usize = 2;
+const OBSTACLE_CHANCE: f64 = 0.20;
+const VISION: u8 = 3;
 
 #[derive(Clone, Copy)]
 pub struct DifficultyParameters {
@@ -24,7 +26,8 @@ pub struct Game {
     pub lives_left: u8,
     pub time_left: Duration,
     pub grid: Vec<Vec<TileType>>,
-    pub score: u16,
+    pub score: usize,
+    pub path_map: HashMap<(u8, u8), HashMap<(u8, u8), (u8, u8)>>,
 }
 
 pub const EASY: DifficultyParameters = DifficultyParameters {
@@ -64,14 +67,14 @@ pub enum Input {
     None,
 }
 
-pub fn generate_grid(difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> Vec<Vec<TileType>> {
+pub fn generate_grid(rng: &mut impl rand::Rng) -> Vec<Vec<TileType>> {
     let mut grid = Vec::new();
     for y in 0..GRID_HEIGHT {
         let mut row = Vec::new();
         for x in 0..GRID_WIDTH {
             if x == 0 || x == GRID_WIDTH - 1 || y == 0 || y == GRID_HEIGHT - 1 {
                 row.push(TileType::Wall);
-            } else if rng.random_bool(0.15) {
+            } else if rng.random_bool(OBSTACLE_CHANCE) {
                 row.push(TileType::Obstacle);
             } else {
                 row.push(TileType::Floor);
@@ -101,36 +104,96 @@ pub fn generate_skeletons(grid: &Vec<Vec<TileType>>, difficulty: DifficultyParam
     floor_tiles.sample(rng, difficulty.skeleton_count as usize).cloned().collect()
 }
 
-pub fn generate_coins(grid: &Vec<Vec<TileType>>, skeletons: &Vec<(u8, u8)>, rng: &mut impl rand::Rng) -> Vec<(u8, u8)> {
-    let floor_tiles = get_floor_tiles(grid, skeletons);
-    floor_tiles.sample(rng, 10).cloned().collect()
+pub fn generate_coins(grid: &Vec<Vec<TileType>>, skeletons: &Vec<(u8, u8)>, player_pos: &(u8, u8), rng: &mut impl rand::Rng, path_map: &HashMap<(u8, u8), HashMap<(u8, u8), (u8, u8)>>) -> Vec<(u8, u8)> {
+    let exclude = [skeletons.as_slice(), &[*player_pos].as_slice()].concat();
+    let floor_tiles = get_floor_tiles(grid, &exclude).into_iter().filter(|tile| {path_map[player_pos].contains_key(tile) }).collect::<Vec<_>>();
+    floor_tiles.sample(rng, 10.min(floor_tiles.len())).cloned().collect()
 }
 
-pub fn spawn_player(grid: &Vec<Vec<TileType>>, skeletons: &Vec<(u8, u8)>, coins: &Vec<(u8, u8)>, rng: &mut impl rand::Rng) -> (u8, u8) {
-    let exclude = [skeletons.as_slice(), coins.as_slice()].concat();
-    let floor_tiles: Vec<(u8, u8)> = get_floor_tiles(grid, &exclude)
+pub fn spawn_player(grid: &Vec<Vec<TileType>>, skeletons: &Vec<(u8, u8)>, rng: &mut impl rand::Rng) -> (u8, u8) {
+    let floor_tiles: Vec<(u8, u8)> = get_floor_tiles(grid, &skeletons)
         .into_iter()
         .filter(|&(x, y)| skeletons.iter().all(|&(sx, sy)| sx.abs_diff(x) + sy.abs_diff(y) >= MIN_DISTANCE))
         .collect();
     floor_tiles.choose(rng).cloned().unwrap_or_else(|| {
-        get_floor_tiles(grid, &exclude).into_iter().next().expect("No valid player spawn points")
+        get_floor_tiles(grid, &skeletons).into_iter().next().expect("No valid player spawn points")
     })
 }
 
+fn bfs(grid: &Vec<Vec<TileType>>, source: (u8, u8)) -> HashMap<(u8, u8), (u8, u8)>  {
+    let mut queue = VecDeque::new();
+    let mut parents: HashMap<(u8, u8), (u8, u8)> = HashMap::new();
+    parents.insert(source, source);
+    queue.push_back(source);
+    while let Some((x, y)) = queue.pop_front() {
+        for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+            let new_x = (x as i16 + dx) as u8;
+            let new_y = (y as i16 + dy) as u8;
+            if new_x >= GRID_WIDTH || new_y >= GRID_HEIGHT {
+                continue;
+            }
+            if matches!(grid[new_y as usize][new_x as usize], TileType::Floor)
+                && !parents.contains_key(&(new_x, new_y))
+            {
+                parents.insert((new_x, new_y), (x, y));
+                queue.push_back((new_x, new_y));
+            }
+        }
+    }
+    parents
+}
+
+fn first_step_towards(parents: &HashMap<(u8, u8), (u8, u8)>, source: (u8, u8), target: (u8, u8)) -> Option<(u8, u8)> {
+    if !parents.contains_key(&target) {
+        return None;
+    }
+    let mut current = target;
+    while parents[&current] != source {
+        current = parents[&current];
+    }
+    Some(current)
+}
+
+fn build_map(grid: &Vec<Vec<TileType>>) -> HashMap<(u8, u8), HashMap<(u8, u8), (u8, u8)>> {
+    let mut path_map = HashMap::new();
+    for y in 0..GRID_HEIGHT {
+        for x in 0..GRID_WIDTH {
+            if matches!(grid[y as usize][x as usize], TileType::Floor) {
+                let source = (x, y);
+                let parents = bfs(grid, source);
+                let mut target_map = HashMap::new();
+                for target in parents.keys() {
+                    if *target != source {
+                        if let Some(step) = first_step_towards(&parents, source, *target) {
+                            target_map.insert(*target, step);
+                        }
+                    }
+                }
+                path_map.insert(source, target_map);
+            }
+        }
+    }
+    path_map
+}
+
+
+
 pub fn move_skeletons(state: &mut Game, player_pos: (u8, u8), rng: &mut impl rand::Rng) {
+    let mut skeletons = state.skeleton_positions.clone();
     for skelly in &mut state.skeleton_positions {
         let distance = skelly.0.abs_diff(player_pos.0) + skelly.1.abs_diff(player_pos.1);
+        skeletons.retain(|&pos| pos != *skelly);
         if distance <= VISION {
             let dx = player_pos.0 as i8 - skelly.0 as i8;
             let dy = player_pos.1 as i8 - skelly.1 as i8;
             if dx.abs() >= dy.abs() {
                 let new_x = if dx > 0 { skelly.0 + 1 } else if dx < 0 { skelly.0 - 1 } else { skelly.0 };
-                if matches!(state.grid[skelly.1 as usize][new_x as usize], TileType::Floor) {
+                if matches!(state.grid[skelly.1 as usize][new_x as usize], TileType::Floor)  && !skeletons.contains(&(new_x, skelly.1)) {
                     skelly.0 = new_x;
                 }
             } else {
                 let new_y = if dy > 0 { skelly.1 + 1 } else if dy < 0 { skelly.1 - 1 } else { skelly.1 };
-                if matches!(state.grid[new_y as usize][skelly.0 as usize], TileType::Floor) {
+                if matches!(state.grid[new_y as usize][skelly.0 as usize], TileType::Floor)  && !skeletons.contains(&(skelly.0, new_y)){
                     skelly.1 = new_y;
                 }
             }
@@ -139,11 +202,12 @@ pub fn move_skeletons(state: &mut Game, player_pos: (u8, u8), rng: &mut impl ran
             let dir = dirs.choose(rng).unwrap();
             let new_x = (skelly.0 as i16 + dir.0 as i16) as u8;
             let new_y = (skelly.1 as i16 + dir.1 as i16) as u8;
-            if matches!(state.grid[new_y as usize][new_x as usize], TileType::Floor) {
+            if matches!(state.grid[new_y as usize][new_x as usize], TileType::Floor) && !skeletons.contains(&(new_x, new_y)) {
                 skelly.0 = new_x;
                 skelly.1 = new_y;
             }
         }
+        skeletons.push(*skelly);
     }
 }
 
@@ -177,7 +241,13 @@ pub fn tick(mut state: Game, input: Input, delta: Duration, rng: &mut impl rand:
         if state.lives_left == 0 {
             return None;
         }
-        state.player_position = spawn_player(&state.grid, &state.skeleton_positions, &state.coin_positions, rng);
+        state.player_position = loop {
+            let new_pos = spawn_player(&state.grid, &state.skeleton_positions, rng);
+            if state.path_map[&new_pos].contains_key(&state.coin_positions[0]) {
+                break new_pos;
+            }
+        }
+            
     }
     if state.coin_positions.contains(&state.player_position) {
         state.score += 10;
@@ -185,16 +255,22 @@ pub fn tick(mut state: Game, input: Input, delta: Duration, rng: &mut impl rand:
     }
     if state.coin_positions.is_empty() {
         state.score += 50;
-        state.coin_positions = generate_coins(&state.grid, &state.skeleton_positions, rng);
+        state.coin_positions = generate_coins(&state.grid, &state.skeleton_positions, &state.player_position, rng, &state.path_map);
     }
     Some(state)
 }
 
 pub fn new_game(difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> Game {
-    let grid = generate_grid(difficulty, rng);
+    let grid = generate_grid(rng);
+    let path_map = build_map(&grid);
     let skeletons = generate_skeletons(&grid, difficulty, rng);
-    let coins = generate_coins(&grid, &skeletons, rng);
-    let player_position = spawn_player(&grid, &skeletons, &coins, rng);
+    let player_position = loop {
+        let candidate = spawn_player(&grid, &skeletons, rng);
+        if path_map[&candidate].len() >= MIN_REGION_SIZE {
+            break candidate;
+        }
+    };
+    let coins = generate_coins(&grid, &skeletons, &player_position, rng, &path_map);
     Game {
         difficulty,
         player_position,
@@ -205,34 +281,35 @@ pub fn new_game(difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> G
         time_left: Duration::from_secs(difficulty.timer as u64),
         grid,
         score: 0,
+        path_map,
     }
 }
 
-#[test]
-fn test() {
-    let mut rng = rand::rng();
-    let grid = generate_grid(EASY, &mut rng);
-    let skeletons = generate_skeletons(&grid, MEDIUM, &mut rng);
-    let coins = generate_coins(&grid, &skeletons, &mut rng);
-    let player = spawn_player(&grid, &skeletons, &coins, &mut rng);
+// #[test]
+// fn test() {
+//     let mut rng = rand::rng();
+//     let grid = generate_grid(&mut rng);
+//     let skeletons = generate_skeletons(&grid, MEDIUM, &mut rng);
+//     // let coins = generate_coins(&grid, &skeletons, &mut rng);
+//     let player = spawn_player(&grid, &skeletons, &coins, &mut rng);
 
-    for (y, row) in grid.iter().enumerate() {
-        let line: String = row.iter().enumerate().map(|(x, t)| {
-            let pos = (x as u8, y as u8);
-            if pos == player { 'P' }
-            else if skeletons.contains(&pos) { 'S' }
-            else if coins.contains(&pos) { 'C' }
-            else {
-                match t {
-                    TileType::Wall => 'W',
-                    TileType::Floor => '.',
-                    TileType::Obstacle => 'O',
-                }
-            }
-        }).collect();
-        println!("{}", line);
-    }
-    println!("Player: {:?}", player);
-    println!("Skeletons: {:?}", skeletons);
-    println!("Coins: {:?}", coins);
-}
+//     for (y, row) in grid.iter().enumerate() {
+//         let line: String = row.iter().enumerate().map(|(x, t)| {
+//             let pos = (x as u8, y as u8);
+//             if pos == player { 'P' }
+//             else if skeletons.contains(&pos) { 'S' }
+//             else if coins.contains(&pos) { 'C' }
+//             else {
+//                 match t {
+//                     TileType::Wall => 'W',
+//                     TileType::Floor => '.',
+//                     TileType::Obstacle => 'O',
+//                 }
+//             }
+//         }).collect();
+//         println!("{}", line);
+//     }
+//     println!("Player: {:?}", player);
+//     println!("Skeletons: {:?}", skeletons);
+//     println!("Coins: {:?}", coins);
+// }
