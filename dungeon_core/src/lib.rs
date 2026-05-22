@@ -7,7 +7,7 @@ pub const MIN_DISTANCE: u8 = 3;
 
 const MIN_REGION_SIZE: usize = 2;
 const OBSTACLE_CHANCE: f64 = 0.20;
-const VISION: u8 = 3;
+const VISION: u8 = 6;
 
 #[derive(Clone, Copy)]
 pub struct DifficultyParameters {
@@ -184,17 +184,10 @@ pub fn move_skeletons(state: &mut Game, player_pos: (u8, u8), rng: &mut impl ran
         let distance = skelly.0.abs_diff(player_pos.0) + skelly.1.abs_diff(player_pos.1);
         skeletons.retain(|&pos| pos != *skelly);
         if distance <= VISION {
-            let dx = player_pos.0 as i8 - skelly.0 as i8;
-            let dy = player_pos.1 as i8 - skelly.1 as i8;
-            if dx.abs() >= dy.abs() {
-                let new_x = if dx > 0 { skelly.0 + 1 } else if dx < 0 { skelly.0 - 1 } else { skelly.0 };
-                if matches!(state.grid[skelly.1 as usize][new_x as usize], TileType::Floor)  && !skeletons.contains(&(new_x, skelly.1)) {
-                    skelly.0 = new_x;
-                }
-            } else {
-                let new_y = if dy > 0 { skelly.1 + 1 } else if dy < 0 { skelly.1 - 1 } else { skelly.1 };
-                if matches!(state.grid[new_y as usize][skelly.0 as usize], TileType::Floor)  && !skeletons.contains(&(skelly.0, new_y)){
-                    skelly.1 = new_y;
+            if let Some(step) = state.path_map[skelly].get(&player_pos) {
+                if !skeletons.contains(&step) {
+                    skelly.0 = step.0;
+                    skelly.1 = step.1;
                 }
             }
         } else {
