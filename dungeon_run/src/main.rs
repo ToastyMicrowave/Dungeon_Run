@@ -14,6 +14,7 @@ struct SpriteRect {
 enum Screen {
     MainMenu,
     DifficultySelect,
+    HowToPlay,
     Playing,
     Paused,
     GameOver(usize),
@@ -26,9 +27,9 @@ const SPRITE_PLAYER: SpriteRect = SpriteRect { x: 16.0 * 4.0, y: 0.0 };
 const SPRITE_SKELETON: SpriteRect = SpriteRect { x: 16.0 * 6.0, y: 16.0 * 3.0};
 const SPRITE_COIN: SpriteRect = SpriteRect { x: 16.0 * 6.0, y: 16.0 * 8.0 };
 
-const MAIN_MENU_BUTTONS: [&str; 2] = ["Play", "Exit"];
+const MAIN_MENU_BUTTONS: [&str; 3] = ["Play", "How To Play", "Exit"];
 const DIFFICULTY_BUTTONS: [&str; 4] = ["Easy", "Medium", "Hard", "Back"];
-const PAUSE_BUTTONS: [&str; 2] = ["Resume", "Main Menu"];
+const PAUSE_BUTTONS: [&str; 4] = ["Resume", "Restart", "How To Play","Main Menu"];
 const GAME_OVER_BUTTONS: [&str; 2] = ["Play Again", "Main Menu"];
 
 fn window_conf() -> Conf {
@@ -50,11 +51,11 @@ fn sprite_params(sprite: SpriteRect) -> DrawTextureParams {
 }
 
 
-fn draw_button(text: &str, x: f32, y: f32, width: f32, font_size: f32, color: Color) {
+fn draw_button(text: &str, x: f32, y: f32, width: f32, max_h: f32, max_o: f32, font_size: f32, color: Color) {
     let size = measure_text(text, None, font_size as u16, 1.0);
     let pad_y = 10.0;
-    let box_height = size.height + size.offset_y + pad_y * 2.0;
-    let box_y = y - size.height - pad_y;
+    let box_height = max_h + max_o + pad_y * 2.0;
+    let box_y = y - max_h - pad_y;
 
     draw_rectangle(x, box_y, width, box_height, Color::from_rgba(50, 50, 58, 255));
     draw_rectangle_lines(x, box_y, width, box_height, 2.0, color);
@@ -65,30 +66,38 @@ fn draw_button(text: &str, x: f32, y: f32, width: f32, font_size: f32, color: Co
 fn generate_menus(title: &str, buttons: &[&str], selected: usize, title_color: Color, title_font_size: f32) {
     let title_size = measure_text(title, None, title_font_size as u16, 1.0);
     let screen_center_x = screen_width() / 2.0;
-    let screen_center_y = screen_height() / 2.0;
+    let screen_center_y = screen_height() / 2.0 - 60.0;
     let font_size = 40.0;
     let pad_x = 28.0;
 
-    draw_text(title,screen_center_x - title_size.width / 2.0,(GRID_HEIGHT as f32 * TILE_SIZE) / 3.0, title_font_size, title_color);
+    draw_text(title,screen_center_x - title_size.width / 2.0,(GRID_HEIGHT as f32 * TILE_SIZE) / 5.0, title_font_size, title_color);
 
-    // All buttons share the width of the widest one.
+    // All buttons share the width and height of the widest/tallest one.
     let btn_width = buttons
         .iter()
         .map(|b| measure_text(b, None, font_size as u16, 1.0).width)
         .fold(0.0_f32, f32::max)
         + pad_x * 2.0;
+    let max_h = buttons
+        .iter()
+        .map(|b| measure_text(b, None, font_size as u16, 1.0).height)
+        .fold(0.0_f32, f32::max);
+    let max_o = buttons
+        .iter()
+        .map(|b| measure_text(b, None, font_size as u16, 1.0).offset_y)
+        .fold(0.0_f32, f32::max);
 
     for (i, button) in buttons.iter().enumerate() {
         let x = screen_center_x - btn_width / 2.0;
-        let y = screen_center_y + i as f32 * (font_size + 28.0);
+        let y = screen_center_y + i as f32 * (font_size + 40.0);
         let color = if i == selected { GOLD } else { WHITE };
-        draw_button(button, x, y, btn_width, font_size, color);
+        draw_button(button, x, y, btn_width, max_h, max_o, font_size, color);
     }
 }
 
 fn render_game(state: &Game, tileset: &Texture2D, charset: &Texture2D) {
-    draw_text(format!("Score: {}", state.score), 10.0, 25.0, 30.0, WHITE);
-    draw_text(format!("Lives: {}", state.lives_left), (GRID_WIDTH as f32 * TILE_SIZE) / 2.3, 25.0, 30.0, WHITE);
+    draw_text(format!("Score: {}", state.score), 10.0, 25.0, 30.0, GOLD);
+    draw_text(format!("Lives: {}", state.lives_left), (GRID_WIDTH as f32 * TILE_SIZE) / 2.3, 25.0, 30.0, RED);
     draw_text(format!("Time: {}s", state.time_left.as_secs()), (GRID_WIDTH as f32 * TILE_SIZE) - 150.0, 25.0, 30.0, WHITE);
 
     for (y, row) in state.grid.iter().enumerate() {
@@ -126,6 +135,7 @@ async fn main() {
     let mut rng = rand::rng();
     let mut screen = Screen::MainMenu;
     let mut selected: usize = 0;
+    let mut how_to_play_from_pause = false;
     let mut state: Game = new_game(MEDIUM, &mut rng); // overwritten when player picks difficulty
     let mut difficulty: DifficultyParameters = MEDIUM;
 
@@ -154,6 +164,7 @@ async fn main() {
                 if is_key_pressed(KeyCode::Enter) {
                     match selected {
                         0 => screen = Screen::DifficultySelect,
+                        1 => {screen = Screen::HowToPlay; how_to_play_from_pause = false},
                         _ => break,
                     }
                     selected = 0;
@@ -184,6 +195,40 @@ async fn main() {
                 }
             }
 
+            Screen::HowToPlay => {
+                let screen_center_x = screen_width() / 2.0;
+
+                // Title at top
+                let title = "How To Play";
+                let title_size = measure_text(title, None, 100, 1.0);
+                draw_text(title, screen_center_x - title_size.width / 2.0, (GRID_HEIGHT as f32 * TILE_SIZE) / 5.0, 100.0, WHITE);
+
+                // Instructions in the middle, multi-line
+                let lines = [
+                    "Move with WASD or arrow keys.",
+                    "Pick up coins for points.",
+                    "Avoid skeletons or lose a life.",
+                    "Score as much as you can!",
+                ];
+                for (i, line) in lines.iter().enumerate() {
+                    let sz = measure_text(line, None, 30, 1.0);
+                    let y = 220.0 + i as f32 * 40.0;
+                    draw_text(line, screen_center_x - sz.width / 2.0, y, 30.0, WHITE);
+                }
+
+                // Back button at the bottom
+                let font_size = 40.0;
+                let pad_x = 28.0;
+                let back_dims = measure_text("Back", None, font_size as u16, 1.0);
+                let btn_width = back_dims.width + pad_x * 2.0;
+                draw_button("Back", screen_center_x - btn_width / 2.0, 450.0, btn_width, back_dims.height, back_dims.offset_y, font_size, GOLD);
+
+                if is_key_pressed(KeyCode::Enter) {
+                    screen = if how_to_play_from_pause { Screen::Paused } else { Screen::MainMenu };
+                    selected = 0;
+                }
+            }
+
             Screen::Playing => {
                 render_game(&state, &tileset, &charset);
                 if is_key_pressed(KeyCode::Escape) {
@@ -211,6 +256,11 @@ async fn main() {
                 if is_key_pressed(KeyCode::Enter) {
                     match selected {
                         0 => screen = Screen::Playing,
+                        1 => {
+                            state = new_game(difficulty, &mut rng);
+                            screen = Screen::Playing;
+                        },
+                        2 => {screen = Screen::HowToPlay; how_to_play_from_pause = true;},
                         _ => screen = Screen::MainMenu,
                     }
                     selected = 0;
@@ -218,33 +268,13 @@ async fn main() {
             }
 
             Screen::GameOver(score) => {
-                clear_background(BLACK);
+                generate_menus("Game Over!", &GAME_OVER_BUTTONS, selected, RED, 100.0);
 
+                // Final score, drawn between title and buttons
                 let screen_center_x = screen_width() / 2.0;
-                let font_size = 40.0;
-                let pad_x = 28.0;
-
-                let title = "Game Over!";
                 let score_str = format!("Final Score: {}", score);
-                let title_dims = measure_text(title, None, 50, 1.0);
-                let score_dims = measure_text(&score_str, None, 30, 1.0);
-                let game_over_y = (GRID_HEIGHT as f32 * TILE_SIZE) / 2.0;
-
-                draw_text(title, screen_center_x - title_dims.width / 2.0, game_over_y, 50.0, RED);
-                draw_text(&score_str, screen_center_x - score_dims.width / 2.0, game_over_y + 40.0, 30.0, WHITE);
-
-                let btn_width = GAME_OVER_BUTTONS
-                    .iter()
-                    .map(|b| measure_text(b, None, font_size as u16, 1.0).width)
-                    .fold(0.0_f32, f32::max)
-                    + pad_x * 2.0;
-
-                for (i, button) in GAME_OVER_BUTTONS.iter().enumerate() {
-                    let x = screen_center_x - btn_width / 2.0;
-                    let y = game_over_y + 100.0 + i as f32 * (font_size + 28.0);
-                    let color = if i == selected { GOLD } else { WHITE };
-                    draw_button(button, x, y, btn_width, font_size, color);
-                }
+                let score_dims = measure_text(&score_str, None, 40, 1.0);
+                draw_text(&score_str, screen_center_x - score_dims.width / 2.0, 160.0, 40.0, WHITE);
 
                 if matches!(input, Input::Up) && selected > 0 { selected -= 1; }
                 if matches!(input, Input::Down) && selected < GAME_OVER_BUTTONS.len() - 1 { selected += 1; }
