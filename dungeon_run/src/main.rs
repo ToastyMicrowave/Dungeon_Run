@@ -100,6 +100,7 @@ fn render_game(state: &Game, tileset: &Texture2D, charset: &Texture2D) {
     draw_text(format!("Lives: {}", state.lives_left), (GRID_WIDTH as f32 * TILE_SIZE) / 2.3, 25.0, 30.0, RED);
     draw_text(format!("Time: {}s", state.time_left.as_secs()), (GRID_WIDTH as f32 * TILE_SIZE) - 150.0, 25.0, 30.0, WHITE);
 
+    // Phase 1: tiles
     for (y, row) in state.grid.iter().enumerate() {
         for (x, tile) in row.iter().enumerate() {
             let pos = (x as f32 * TILE_SIZE, y as f32 * TILE_SIZE + HUD_HEIGHT);
@@ -112,7 +113,28 @@ fn render_game(state: &Game, tileset: &Texture2D, charset: &Texture2D) {
                 draw_texture_ex(tileset, pos.0, pos.1, color, sprite_params(SPRITE_FLOOR));
             }
             draw_texture_ex(tileset, pos.0, pos.1, color, sprite_params(sprite));
+        }
+    }
 
+    // Phase 2: skeleton vision overlay, drawn over tiles but under entities. Overlapping skeletons stack.
+    for &(sx, sy) in &state.skeleton_positions {
+        for dy in -(VISION as i16)..=(VISION as i16) {
+            for dx in -(VISION as i16)..=(VISION as i16) {
+                if dx.abs() + dy.abs() > VISION as i16 { continue; }
+                let tx = sx as i16 + dx;
+                let ty = sy as i16 + dy;
+                if tx < 0 || ty < 0 || tx >= GRID_WIDTH as i16 || ty >= GRID_HEIGHT as i16 || matches!(state.grid[ty as usize][tx as usize], TileType::Wall) { continue; }
+                let px = tx as f32 * TILE_SIZE;
+                let py = ty as f32 * TILE_SIZE + HUD_HEIGHT;
+                draw_rectangle(px, py, TILE_SIZE, TILE_SIZE, Color::from_rgba(255, 50, 50, 10));
+            }
+        }
+    }
+
+    // Phase 3: entities
+    for (y, row) in state.grid.iter().enumerate() {
+        for (x, _tile) in row.iter().enumerate() {
+            let pos = (x as f32 * TILE_SIZE, y as f32 * TILE_SIZE + HUD_HEIGHT);
             if state.player_position == (x as u8, y as u8) {
                 draw_texture_ex(charset, pos.0, pos.1, WHITE, sprite_params(SPRITE_PLAYER));
             } else if state.skeleton_positions.contains(&(x as u8, y as u8)) {

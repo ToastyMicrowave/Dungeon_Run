@@ -4,10 +4,11 @@ use rand::{seq::IndexedRandom, RngExt};
 pub const GRID_WIDTH: u8 = 14;
 pub const GRID_HEIGHT: u8 = 8;
 pub const MIN_DISTANCE: u8 = 3;
+pub const VISION: u8 = 4;
 
 const MIN_REGION_SIZE: usize = 2;
 const OBSTACLE_CHANCE: f64 = 0.10;
-const VISION: u8 = 4;
+
 
 pub type PathMap = HashMap<(u8, u8), HashMap<(u8, u8), (u8, u8)>>;
 
