@@ -115,12 +115,13 @@ fn render_game(state: &Game, tileset: &Texture2D, charset: &Texture2D) {
             draw_texture_ex(tileset, pos.0, pos.1, color, sprite_params(sprite));
         }
     }
+    let vision = state.difficulty.vision as i16;
 
     // Phase 2: skeleton vision overlay, drawn over tiles but under entities. Overlapping skeletons stack.
     for &(sx, sy) in &state.skeleton_positions {
-        for dy in -(VISION as i16)..=(VISION as i16) {
-            for dx in -(VISION as i16)..=(VISION as i16) {
-                if dx.abs() + dy.abs() > VISION as i16 { continue; }
+        for dy in -vision..=vision {
+            for dx in -vision..=vision {
+                if dx.abs() + dy.abs() > vision { continue; }
                 let tx = sx as i16 + dx;
                 let ty = sy as i16 + dy;
                 if tx < 0 || ty < 0 || tx >= GRID_WIDTH as i16 || ty >= GRID_HEIGHT as i16 || matches!(state.grid[ty as usize][tx as usize], TileType::Wall) { continue; }
@@ -296,7 +297,7 @@ async fn main() {
                 let screen_center_x = screen_width() / 2.0;
                 let score_str = format!("Final Score: {}", score);
                 let score_dims = measure_text(&score_str, None, 40, 1.0);
-                draw_text(&score_str, screen_center_x - score_dims.width / 2.0, 160.0, 40.0, WHITE);
+                draw_text(&score_str, screen_center_x - score_dims.width / 2.0, 200.0, 40.0, WHITE);
 
                 if matches!(input, Input::Up) && selected > 0 { selected -= 1; }
                 if matches!(input, Input::Down) && selected < GAME_OVER_BUTTONS.len() - 1 { selected += 1; }

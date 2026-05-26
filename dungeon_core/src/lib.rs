@@ -1,10 +1,10 @@
 use std::{collections::{HashMap, VecDeque}, time::Duration};
 use rand::{seq::IndexedRandom, RngExt};
 
-pub const GRID_WIDTH: u8 = 14;
-pub const GRID_HEIGHT: u8 = 8;
+pub const GRID_WIDTH: u8 = 20;
+pub const GRID_HEIGHT: u8 = 12;
 pub const MIN_DISTANCE: u8 = 3;
-pub const VISION: u8 = 4;
+pub const TIMER: u64 = 120;
 
 const MIN_REGION_SIZE: usize = 2;
 const OBSTACLE_CHANCE: f64 = 0.10;
@@ -15,9 +15,9 @@ pub type PathMap = HashMap<(u8, u8), HashMap<(u8, u8), (u8, u8)>>;
 #[derive(Clone, Copy)]
 pub struct DifficultyParameters {
     pub lives: u8,
-    pub timer: u8,
     pub skeleton_count: u8,
     pub skeleton_speed: f32,
+    pub vision: u8,
 }
 
 pub struct Game {
@@ -35,23 +35,23 @@ pub struct Game {
 
 pub const EASY: DifficultyParameters = DifficultyParameters {
     lives: 5,
-    timer: 90,
-    skeleton_count: 2,
+    skeleton_count: 4,
     skeleton_speed: 1.0,
+    vision: 3,
 };
 
 pub const MEDIUM: DifficultyParameters = DifficultyParameters {
     lives: 3,
-    timer: 60,
-    skeleton_count: 4,
+    skeleton_count: 6,
     skeleton_speed: 1.25,
+    vision: 4,
 };
 
 pub const HARD: DifficultyParameters = DifficultyParameters {
     lives: 2,
-    timer: 45,
-    skeleton_count: 5,
+    skeleton_count: 8,
     skeleton_speed: 1.5,
+    vision: 5,
 };
 
 #[derive(PartialEq)]
@@ -184,7 +184,7 @@ pub fn move_skeletons(state: &mut Game, player_pos: (u8, u8), rng: &mut impl ran
     for skelly in &mut state.skeleton_positions {
         let distance = skelly.0.abs_diff(player_pos.0) + skelly.1.abs_diff(player_pos.1);
         skeletons.retain(|&pos| pos != *skelly);
-        if distance <= VISION {
+        if distance <= state.difficulty.vision {
             if let Some(step) = state.path_map[skelly].get(&player_pos) && !skeletons.contains(step) {
                     skelly.0 = step.0;
                     skelly.1 = step.1;
@@ -270,7 +270,7 @@ pub fn new_game(difficulty: DifficultyParameters, rng: &mut impl rand::Rng) -> G
         skeleton_move_accumulator: Duration::ZERO,
         coin_positions: coins,
         lives_left: difficulty.lives,
-        time_left: Duration::from_secs(difficulty.timer as u64),
+        time_left: Duration::from_secs(TIMER),
         grid,
         score: 0,
         path_map,
