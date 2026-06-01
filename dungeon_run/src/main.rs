@@ -1,10 +1,12 @@
 use macroquad::prelude::*;
-use std::time::Duration;
+use std::{time::Duration, fs};
 use ::rand;
 use dungeon_core::*;
 
 const TILE_SIZE: f32 = 64.0;
 const HUD_HEIGHT: f32 = 40.0;
+
+const HIGHSCORE_FILE: &str = "highscore.txt";
 
 struct SpriteRect {
     x: f32,
@@ -31,6 +33,18 @@ const MAIN_MENU_BUTTONS: [&str; 3] = ["Play", "How To Play", "Exit"];
 const DIFFICULTY_BUTTONS: [&str; 4] = ["Easy", "Medium", "Hard", "Back"];
 const PAUSE_BUTTONS: [&str; 4] = ["Resume", "Restart", "How To Play","Main Menu"];
 const GAME_OVER_BUTTONS: [&str; 2] = ["Play Again", "Main Menu"];
+
+fn load_highscore() -> usize {
+    if let Ok(contents) = fs::read_to_string(HIGHSCORE_FILE) {
+        contents.trim().parse().unwrap_or(0)
+    } else {
+        0
+    }
+}
+
+fn save_highscore(score: usize) {
+    let _ = fs::write(HIGHSCORE_FILE, score.to_string());
+}
 
 fn window_conf() -> Conf {
     Conf {
@@ -149,6 +163,7 @@ fn render_game(state: &Game, tileset: &Texture2D, charset: &Texture2D) {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    let mut high_score = load_highscore();
     let tileset = load_texture("assets/Dungeon_Tileset.png").await.unwrap();
     let charset = load_texture("assets/Dungeon_Character.png").await.unwrap();
 
@@ -180,6 +195,9 @@ async fn main() {
         match screen {
             Screen::MainMenu => {
                 generate_menus("Dungeon Run", &MAIN_MENU_BUTTONS, selected, GOLD, 150.0);
+                let hs_text = format!("High Score: {}", high_score);
+                let hs_dims = measure_text(&hs_text, None, 30, 1.0);
+                draw_text(&hs_text, screen_width() / 2.0 - hs_dims.width / 2.0, 220.0, 30.0, GOLD);
 
                 if matches!(input, Input::Up) && selected > 0 { selected -= 1; }
                 if matches!(input, Input::Down) && selected < MAIN_MENU_BUTTONS.len() - 1 { selected += 1; }
@@ -262,6 +280,10 @@ async fn main() {
                     if let Some(new_state) = tick(state, input, delta, &mut rng) {
                         state = new_state;
                     } else {
+                        if score > high_score {
+                            high_score = score;
+                            save_highscore(high_score);
+                        }
                         screen = Screen::GameOver(score);
                         state = new_game(difficulty, &mut rng);
                     }
@@ -298,6 +320,9 @@ async fn main() {
                 let score_str = format!("Final Score: {}", score);
                 let score_dims = measure_text(&score_str, None, 40, 1.0);
                 draw_text(&score_str, screen_center_x - score_dims.width / 2.0, 200.0, 40.0, WHITE);
+                let hs_text = format!("High Score: {}", high_score);
+                let hs_dims = measure_text(&hs_text, None, 30, 1.0);
+                draw_text(&hs_text, screen_center_x - hs_dims.width / 2.0, 240.0, 30.0, GOLD);
 
                 if matches!(input, Input::Up) && selected > 0 { selected -= 1; }
                 if matches!(input, Input::Down) && selected < GAME_OVER_BUTTONS.len() - 1 { selected += 1; }
