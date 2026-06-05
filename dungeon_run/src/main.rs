@@ -2,7 +2,7 @@
 //! tick → render loop. All actual game rules live in `dungeon_core`; this crate
 //! only draws the state and feeds player input into it.
 
-use ::rand;
+use ::rand::{self, RngExt, SeedableRng, rngs::StdRng};
 use dungeon_core::*;
 use macroquad::prelude::*;
 use std::{fs, time::Duration};
@@ -255,7 +255,16 @@ async fn main() {
     tileset.set_filter(FilterMode::Nearest);
     charset.set_filter(FilterMode::Nearest);
 
-    let mut rng = rand::rng();
+    // Seed a deterministic RNG so a run can be reproduced. Pass a seed as the
+    // first CLI arg (`cargo run -p dungeon_run -- 42`), otherwise grab a random
+    // one. Either way it's printed, so any playthrough can be replayed exactly.
+    let seed: u64 = std::env::args()
+        .nth(1)
+        .and_then(|arg| arg.parse().ok())
+        .unwrap_or_else(|| rand::rng().random());
+    println!("Seed: {seed}");
+    let mut rng = StdRng::seed_from_u64(seed);
+
     let mut screen = Screen::MainMenu;
     let mut selected: usize = 0;
     let mut how_to_play_from_pause = false;

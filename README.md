@@ -119,8 +119,11 @@ and live in `dungeon_core` as plain data — see `EASY` / `MEDIUM` / `HARD`.)
 Requires a [Rust toolchain](https://rustup.rs) (stable).
 
 ```sh
-# Play the game
+# Play the game (prints the RNG seed at startup)
 cargo run -p dungeon_run --release
+
+# Replay an exact run by passing that seed
+cargo run -p dungeon_run --release -- 42
 
 # Run the headless logic tests
 cargo test -p dungeon_core
@@ -135,7 +138,8 @@ cargo clippy
 - [ ] Unit tests covering collision, scoring, and win/lose conditions in
       `dungeon_core` (the crate is headless-testable by design — this is the
       next priority).
-- [ ] Expose the seed via a CLI flag for fully reproducible runs.
+- [x] Seed the RNG from an optional CLI arg (random otherwise) and print it, so
+      any playthrough can be replayed exactly.
 - [ ] A reinforcement-learning agent that drives `tick()` directly, training
       headlessly against the same game logic a human plays.
 - [ ] Sound effects (out of MVP scope; only if core gameplay is locked).
