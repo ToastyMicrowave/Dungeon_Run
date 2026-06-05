@@ -33,10 +33,11 @@ The boundary is strict: if you find yourself wanting to import Macroquad into
   by one tick, and returns the new state. `dungeon_run`'s loop reads input →
   translates it to an action → calls the tick → renders. The RL agent will
   later call the same tick function without rendering.
-- **Action set:** `Up | Down | Left | Right | NoOp`.
-- **Difficulty is data, not code.** A `DifficultyConfig` struct (lives, time
-  limit, skeleton count, skeleton speed) is passed into the game on new-game.
-  Do not hardcode difficulty values.
+- **Action set:** `Up | Down | Left | Right | None`.
+- **Difficulty is data, not code.** A `DifficultyParameters` struct (lives,
+  skeleton count, skeleton speed, vision range) is passed into the game on
+  new-game. Do not hardcode difficulty values. (The time limit is a single
+  shared `TIMER` constant rather than per-difficulty.)
 - **Determinism:** randomness (skeleton spawns, patrol directions) goes through
   a seedable RNG so a playthrough can be reproduced for debugging.
 
@@ -45,20 +46,23 @@ The boundary is strict: if you find yourself wanting to import Macroquad into
 - Player collects a coin → score increases.
 - Player touches a skeleton → loses a life.
 - Round ends when lives reach 0 OR the timer reaches 0.
-- Skeletons patrol; spawn positions and patrol paths are randomised per
-  playthrough.
+- Skeletons chase the player along the shortest path when within vision range,
+  and wander randomly otherwise. Spawn positions are randomised per playthrough.
 - The player starts away from skeletons.
 
-## Difficulty starting values
+## Difficulty values
 
-| Difficulty | Lives | Time | Skeletons | Skeleton speed |
+All modes share a 120s timer on a 20×12 grid; difficulty scales with skeleton
+count, speed, and vision range.
+
+| Difficulty | Lives | Skeletons | Skeleton speed | Vision |
 | --- | --- | --- | --- | --- |
-| Easy | 5 | 90s | 2 | Slow |
-| Normal | 3 | 60s | 4 | Medium |
-| Hard | 2 | 45s | 6 | Fast |
+| Easy | 5 | 4 | Slow (1.0×) | 3 |
+| Medium | 3 | 6 | Medium (1.25×) | 4 |
+| Hard | 2 | 8 | Fast (1.5×) | 5 |
 
-These are starting values for balancing, not final numbers — expect to tune
-them through playtesting.
+These were tuned through playtesting from the original starting values; expect
+to keep tuning them.
 
 ## Controls
 
