@@ -11,8 +11,11 @@ modes, limited lives, and a persistent high score.
 > rendering so the same tick loop can later be driven by a reinforcement-learning
 > agent instead of a keyboard.
 
-<!-- TODO: drop a gameplay screenshot or GIF here — it sells the project instantly.
-     e.g. ![Dungeon Run gameplay](docs/gameplay.gif) -->
+
+
+https://github.com/user-attachments/assets/eb8891d4-3027-4b97-aa57-435f65260897
+
+
 
 ## Highlights
 
